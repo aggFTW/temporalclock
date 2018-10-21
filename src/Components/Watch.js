@@ -3,14 +3,16 @@ import SunCalc from 'suncalc'
 import 'react-vis/dist/style.css';
 import {XYPlot, ArcSeries, DecorativeAxis} from 'react-vis';
 import {ToggleButton, ToggleButtonGroup} from 'react-bootstrap';
+import moment from 'moment/moment.js';
+import timezone from 'moment-timezone';
 
 const daySegments = 6;
 const nightSegments = daySegments;
 const degreesPerSecondInDay = 360 / (3600 * 24);
 const cities = {
-  "Seattle": {latitude: 47.6062, longitude: -122.3321, timezoneOffset: -7},
-  "Melbourne": {latitude: -37.8136, longitude: 144.9631, timezoneOffset: +11},
-  "Reykjavik": {latitude: 64.1466, longitude: 21.9426, timezoneOffset: +0}
+  "Seattle": {latitude: 47.6062, longitude: -122.3321, tz: "America/Los_Angeles", timezoneOffset: -7},
+  "Melbourne": {latitude: -37.8136, longitude: 144.9631, tz: "Australia/Melbourne", timezoneOffset: +11},
+  "Reykjavik": {latitude: 64.1466, longitude: -21.9426, tz: "Atlantic/Reykjavik", timezoneOffset: +0}
 }
 
 export class Watch extends React.Component {
@@ -66,17 +68,27 @@ export class Watch extends React.Component {
     let latitude = cities[this.state.city].latitude;
     let longitude = cities[this.state.city].longitude;
 
-    let today = new Date();
+    let today = moment.tz(cities[this.state.city].tz).toDate();
 
-    // This is wrong since the current time zone is kept!!!
+    // This is wrong since the current time zone is kept!!! But there's no way around it? :(
     let minutesToOffset = today.getTimezoneOffset() + cities[this.state.city].timezoneOffset * 60;
     today.setMinutes(today.getMinutes() + minutesToOffset);
 
     let times = this.getTimes(today, latitude, longitude);
     let sunrise = times.sunrise;
+    sunrise.setMinutes(sunrise.getMinutes() + minutesToOffset);
     let sunset = times.sunset;
+    sunset.setMinutes(sunset.getMinutes() + minutesToOffset);
     let dayAngle = this.angleDifferenceBetweenTimes(sunrise, sunset);
     let nightAngle = 360 - dayAngle;
+    
+    let midnight = new Date(
+      sunset.getFullYear(),
+      sunset.getMonth(),
+      sunset.getDate(),
+      0,0,0);
+    let secondsSinceMidnight = sunset - midnight;
+    let rotation = 180 + secondsSinceMidnight * degreesPerSecondInDay / 1000;
 
     this.setState({
       today: today,
@@ -84,7 +96,7 @@ export class Watch extends React.Component {
       sunset: sunset,
       dayAngle: dayAngle / daySegments,
       nightAngle: nightAngle / nightSegments,
-      targetRotation: 3 * dayAngle / daySegments
+      targetRotation: rotation
     });
   }
 
@@ -193,11 +205,9 @@ export class Watch extends React.Component {
 
     return (
       <div>
+        The time is: {this.state.today.toLocaleString()}<br />
         Sunrise: {this.state.sunrise.toString()}<br />
         Sunset: {this.state.sunset.toString()}<br />
-        <br />
-        <br />
-        The time is: {this.state.today.toLocaleString()}<br />
         <br />
         <br />
         {/* <ToggleButtonGroup
@@ -213,7 +223,7 @@ export class Watch extends React.Component {
         </form>
         <br />
         <br />
-        <div>
+        <div style={{display: 'flex',  justifyContent:'center', alignItems:'center'}}>
           <XYPlot
             xDomain={[-1, 1]}
             yDomain={[-1, 1]}
@@ -233,17 +243,19 @@ export class Watch extends React.Component {
               data={hourData}
               colorType={'literal'}
             />
-            {numberAxes}
+            {
+              numberAxes
+            }
           </XYPlot>
         </div>
-        <br />
+        {/* <br />
         <br />
         Day angle: {this.state.dayAngle * daySegments}<br />
         Day segment angle: {this.state.dayAngle}<br />
         <br />
         <br />
         Night angle: {this.state.nightAngle * nightSegments}<br />
-        Night segment angle: {this.state.nightAngle}<br />
+        Night segment angle: {this.state.nightAngle}<br /> */}
       </div>
     );
   }
