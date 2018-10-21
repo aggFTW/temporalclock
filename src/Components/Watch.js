@@ -1,14 +1,15 @@
 import React from 'react';
 import SunCalc from 'suncalc'
 import 'react-vis/dist/style.css';
-import {XYPlot, ArcSeries, DecorativeAxis} from 'react-vis';
-import {ToggleButton, ToggleButtonGroup} from 'react-bootstrap';
+import {XYPlot, ArcSeries, MarkSeries, LabelSeries} from 'react-vis';
+// import {ToggleButton, ToggleButtonGroup} from 'react-bootstrap';
 import moment from 'moment/moment.js';
 import timezone from 'moment-timezone';
 
 const daySegments = 6;
 const nightSegments = daySegments;
 const degreesPerSecondInDay = 360 / (3600 * 24);
+const radiusText = 0.9;
 const cities = {
   "Seattle": {latitude: 47.6062, longitude: -122.3321, tz: "America/Los_Angeles", timezoneOffset: -7},
   "Melbourne": {latitude: -37.8136, longitude: 144.9631, tz: "Australia/Melbourne", timezoneOffset: +11},
@@ -22,22 +23,41 @@ export class Watch extends React.Component {
     this.handleCityChange = this.handleCityChange.bind(this);
     this.handleOptionChange = this.handleOptionChange.bind(this);
 
+    this.numberMarks = [...new Array(24)].map((row, index) => {
+      let angle = -90 + (index * 360 / 24);
+      let radians = this.degreeToRadians(angle);
+      let x0 = radiusText * Math.cos(radians);
+      let y0 = radiusText * Math.sin(radians);
+
+      return {
+        x: x0,
+        y: y0,
+        size: 2
+      };
+    });
+
+    const textOffset = 0.05;
+    this.numberText = [...new Array(24)].map((row, index) => {
+      let angle = -90 + (index * 360 / 24);
+      let radians = this.degreeToRadians(angle);
+      let x0 = (radiusText - textOffset) * Math.cos(radians);
+      let y0 = (radiusText - textOffset) * Math.sin(radians);
+
+      return {
+        x: x0,
+        y: y0,
+        label: "" + (24 - index)
+      };
+    });
+
     this.state = {
-      city: "Seattle",
-      today: null,
-      sunrise: null,
-      sunset: null,
-      dayAngle: null,
-      nightAngle: null,
-      targetRotation: null
-    }
+      city: "Seattle"
+    };
   }
 
   componentWillMount() {
-    this.intervalID = setInterval(
-      () => this.tick(),
-      1000
-    );
+    this.setState(this.tick());
+    this.intervalID = setInterval(() => this.setState(this.tick()), 1000);
   }
 
   componentWillUnmount() {
@@ -90,14 +110,14 @@ export class Watch extends React.Component {
     let secondsSinceMidnight = sunset - midnight;
     let rotation = 180 + secondsSinceMidnight * degreesPerSecondInDay / 1000;
 
-    this.setState({
+    return {
       today: today,
       sunrise: sunrise,
       sunset: sunset,
       dayAngle: dayAngle / daySegments,
       nightAngle: nightAngle / nightSegments,
       targetRotation: rotation
-    });
+    };
   }
 
   updateData() {
@@ -108,7 +128,7 @@ export class Watch extends React.Component {
     const dayColors = ["#ff8967", "#fec051", "#ffe577", "#ffe577", "#fec051", "#ff8967"];
     const nightColors = ["#403f85", "#392033", "#010318", "#010318", "#392033", "#403f85"]
     
-    let newData = [...new Array(nightSegments)].map((row, index) => {
+    let nightData = [...new Array(nightSegments)].map((row, index) => {
       return {
         radius0: 0,
         radius: 1,
@@ -118,9 +138,9 @@ export class Watch extends React.Component {
       };
     });
 
-    let lastNightAngle = newData[nightSegments-1].angle;
+    let lastNightAngle = nightData[nightSegments-1].angle;
     
-    return newData.concat([...new Array(daySegments)].map((row, index) => {
+    let dayData = [...new Array(daySegments)].map((row, index) => {
       return {
         radius0: 0,
         radius: 1,
@@ -128,7 +148,12 @@ export class Watch extends React.Component {
         angle0: lastNightAngle + index * dayRadians,
         color: dayColors[index]
       };
-    }));
+    });
+
+    return {
+      dayData: dayData,
+      nightData: nightData
+    };
   }
 
   handleCityChange(e) {
@@ -145,9 +170,14 @@ export class Watch extends React.Component {
     if (!this.state.today) {
       return "updating";
     }
+    
+    let toggles = Object.keys(cities).map((city) => {
+      //return <ToggleButton key={city} value={city}>{city}</ToggleButton>
+      return <label><input key={city} value={city} type="radio" name="cities" onChange={this.handleOptionChange} checked={this.state.city === city}/>{city}<br/></label>
+    });
 
     let temporalData = this.updateData();
-
+    
     let midnight = new Date(
       this.state.today.getFullYear(),
       this.state.today.getMonth(),
@@ -156,58 +186,21 @@ export class Watch extends React.Component {
     let timeToDisplay = this.state.today;
     let secondsSinceMidnight = timeToDisplay - midnight;
     let hoursAngle = Math.PI + this.degreeToRadians(secondsSinceMidnight * degreesPerSecondInDay / 1000);
+
+    const hourThickness = 0.03;
     let hourData = [{
       radius0: 0,
-      radius: 1,
-      angle0: hoursAngle - 0.01,
-      angle: hoursAngle + 0.01,
-      color: "grey"
+      radius: radiusText - 0.15,
+      angle0: hoursAngle - hourThickness / 2,
+      angle: hoursAngle + hourThickness / 2,
+      color: "Gray"
     }];
-
-    let toggles = Object.keys(cities).map((city) => {
-      //return <ToggleButton key={city} value={city}>{city}</ToggleButton>
-      return <label><input key={city} value={city} type="radio" name="cities" onChange={this.handleOptionChange} checked={this.state.city === city}/>{city}<br/></label>
-    });
-
-    const radiusText = 0.9;
-    let numberAxes = [...new Array(24)].map((row, index) => {
-      let angle = -90 + (index * 360 / 24);
-      let radians = this.degreeToRadians(angle);
-      let x0 = radiusText * Math.cos(radians);
-      let y0 = radiusText * Math.sin(radians);
-
-      let domainStart = 0;
-      let domainEnd = index;
-      if (index === 0) {
-        domainStart = -1;
-        domainEnd = 0;
-      }
-
-      return <DecorativeAxis
-              key={index}
-              hideLine
-              axisStart={{x: 0, y: 0}}
-              axisEnd={{x: -x0, y: y0}}
-              tickValue={(t, i) => {
-                if (t === index) {
-                  return "" + index;
-                }
-                return "";
-              }}
-              axisDomain={[domainStart, domainEnd]}
-              style={{
-                line: {stroke: 'pink'},
-                ticks: {stroke: 'pink'},
-                text: {stroke: 'none', fill: '#6b6b76', fontWeight: 600}
-              }}
-            />;
-    });
 
     return (
       <div>
         The time is: {this.state.today.toLocaleString()}<br />
-        Sunrise: {this.state.sunrise.toString()}<br />
-        Sunset: {this.state.sunset.toString()}<br />
+        Sunrise: {this.state.sunrise.toLocaleString()}<br />
+        Sunset: {this.state.sunset.toLocaleString()}<br />
         <br />
         <br />
         {/* <ToggleButtonGroup
@@ -234,18 +227,34 @@ export class Watch extends React.Component {
             <ArcSeries
               animation
               radiusDomain={[0, 1]}
-              data={temporalData}
+              data={temporalData.dayData}
               colorType={'literal'}
             />
+            <ArcSeries
+              animation
+              radiusDomain={[0, 1]}
+              data={temporalData.nightData}
+              colorType={'literal'}
+            />
+            <MarkSeries
+              sizeRange={[0, 5]}
+              data={this.numberMarks}
+              colorType="literal"
+              color="LightGray"
+              getLabel={x => x.time}
+              />
+            <LabelSeries
+              colorType={'literal'}
+              data={this.numberText}
+              style={{fontSize: 20, fontWeight: "bold", fontFamily: "Helvetica", fill: "LightGray"}}
+              labelAnchorX="center"
+              labelAnchorY="center" />
             <ArcSeries
               animation
               radiusDomain={[0, 1]}
               data={hourData}
               colorType={'literal'}
             />
-            {
-              numberAxes
-            }
           </XYPlot>
         </div>
         {/* <br />

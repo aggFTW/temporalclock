@@ -8,7 +8,7 @@ class App extends Component {
     return (
       <div className="App">
         <Watch />
-        <img src={explanation} />
+        <img src={explanation} alt="explanation of temporal clock" />
       </div>
     );
   }
